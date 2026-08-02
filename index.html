@@ -39,20 +39,48 @@
             line-height: 1.7;
         }
 
+        .topic-setting {
+            margin-top: 20px;
+            padding: 18px;
+            background-color: #e8f4ff;
+            border-radius: 12px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 10px;
+            font-size: 21px;
+            font-weight: bold;
+        }
+
+        input {
+            width: 80%;
+            max-width: 320px;
+            padding: 13px;
+            border: 2px solid #999999;
+            border-radius: 8px;
+            font-size: 23px;
+            text-align: center;
+        }
+
         button {
-            margin: 18px;
-            padding: 16px 30px;
+            margin: 14px 8px;
+            padding: 15px 26px;
             border: none;
             border-radius: 12px;
             background-color: #1976d2;
             color: white;
-            font-size: 24px;
+            font-size: 22px;
             cursor: pointer;
         }
 
         button:disabled {
             background-color: #999999;
             cursor: not-allowed;
+        }
+
+        #setTopicButton {
+            background-color: #00897b;
         }
 
         .box {
@@ -65,7 +93,8 @@
             word-break: break-word;
         }
 
-        #mqttStatus {
+        #mqttStatus,
+        #topicStatus {
             font-weight: bold;
         }
 
@@ -80,6 +109,12 @@
             min-height: 42px;
             margin-top: 8px;
             font-size: 28px;
+            font-weight: bold;
+        }
+
+        #topicText {
+            margin-top: 5px;
+            font-size: 25px;
             font-weight: bold;
         }
 
@@ -110,7 +145,7 @@
         }
     </style>
 
-    <!-- 固定使用 MQTT.js 4.3.7 -->
+    <!-- 載入 MQTT.js -->
     <script src="https://unpkg.com/mqtt@4.3.7/dist/mqtt.min.js"></script>
 </head>
 
@@ -121,15 +156,52 @@
         <h1>🎤 語音 MQTT 控制</h1>
 
         <p>
-            請先確認 MQTT 顯示「已連線」，<br>
-            再按下按鈕並說出控制指令。
+            請先輸入自己的學號並設定 Topic，<br>
+            再使用語音控制。
         </p>
+
+        <!-- 學號與 Topic 設定 -->
+        <div class="topic-setting">
+
+            <label for="studentId">
+                請輸入學號
+            </label>
+
+            <input
+                type="text"
+                id="studentId"
+                placeholder="例如：413501"
+                inputmode="numeric"
+                maxlength="10"
+            >
+
+            <br>
+
+            <button id="setTopicButton">
+                設定 Topic
+            </button>
+
+            <div>
+                設定狀態：
+                <span id="topicStatus" class="waiting">
+                    尚未設定
+                </span>
+            </div>
+
+        </div>
 
         <div class="box">
             MQTT 狀態：
             <span id="mqttStatus" class="waiting">
                 準備連線……
             </span>
+        </div>
+
+        <div class="box">
+            目前 MQTT Topic：
+            <div id="topicText">
+                尚未設定
+            </div>
         </div>
 
         <button id="startButton" disabled>
@@ -157,11 +229,6 @@
             </div>
         </div>
 
-        <div class="box">
-            MQTT 主題：
-            <div id="topicText"></div>
-        </div>
-
         <div class="command-list">
             可以說：
             <br>
@@ -177,7 +244,7 @@
         <div class="box small-text">
             Broker：
             <br>
-            wss://broker.mqttgo.io:8084/mqtt
+            wss://mqttgo.io:8084
             <br><br>
             Client ID：
             <br>
@@ -194,13 +261,12 @@
         const brokerUrl =
             "wss://mqttgo.io:8084";
 
-        const mqttTopic =
-            "lws621022/voice-mqtt/light";
-
         /*
-            每台手機或平板產生不同的 Client ID，
-            避免多台裝置使用相同名稱而互相斷線。
+            Topic 尚未設定時保持空字串。
+            學生輸入學號後，會變成 tlhc/學號。
         */
+        let mqttTopic = "";
+
         const clientId =
             "voice_" +
             Date.now() +
@@ -210,6 +276,15 @@
         // ==========================================
         // 取得網頁元件
         // ==========================================
+
+        const studentIdInput =
+            document.getElementById("studentId");
+
+        const setTopicButton =
+            document.getElementById("setTopicButton");
+
+        const topicStatus =
+            document.getElementById("topicStatus");
 
         const mqttStatus =
             document.getElementById("mqttStatus");
@@ -232,7 +307,6 @@
         const clientIdText =
             document.getElementById("clientIdText");
 
-        topicText.textContent = mqttTopic;
         clientIdText.textContent = clientId;
 
         // ==========================================
@@ -262,39 +336,29 @@
         const client = mqtt.connect(brokerUrl, {
             clientId: clientId,
 
-            /*
-                4 代表 MQTT 3.1.1，
-                與常用的 ESP8266 PubSubClient 相容。
-            */
+            // MQTT 3.1.1
             protocolVersion: 4,
 
             clean: true,
-
             keepalive: 30,
-
             connectTimeout: 15000,
 
-            /*
-                中斷後每隔 3 秒重新連線。
-            */
-            reconnectPeriod: 3000,
-
-            resubscribe: true
+            // 中斷後每隔 3 秒重新連線
+            reconnectPeriod: 3000
         });
 
         // ==========================================
         // MQTT 連線事件
         // ==========================================
 
-        client.on("connect", function (packet) {
+        client.on("connect", function () {
             mqttStatus.textContent = "已連線";
             mqttStatus.className = "connected";
 
-            startButton.disabled = false;
+            updateStartButton();
 
             console.log("MQTT 連線成功");
             console.log("Client ID：", clientId);
-            console.log("連線資料：", packet);
         });
 
         client.on("reconnect", function () {
@@ -305,8 +369,6 @@
                 "waiting";
 
             startButton.disabled = true;
-
-            console.log("MQTT 正在重新連線");
         });
 
         client.on("offline", function () {
@@ -317,15 +379,9 @@
                 "disconnected";
 
             startButton.disabled = true;
-
-            console.log("MQTT 目前離線");
         });
 
         client.on("close", function () {
-            /*
-                close 可能在重新連線過程中觸發，
-                因此不要在已連線狀態下覆蓋畫面。
-            */
             if (!client.connected) {
                 mqttStatus.textContent =
                     "連線中斷，正在重試……";
@@ -335,8 +391,6 @@
 
                 startButton.disabled = true;
             }
-
-            console.log("MQTT 連線已關閉");
         });
 
         client.on("error", function (error) {
@@ -352,6 +406,91 @@
         });
 
         // ==========================================
+        // 設定學生的 Topic
+        // ==========================================
+
+        setTopicButton.addEventListener(
+            "click",
+            function () {
+                /*
+                    移除學號前後空格。
+                */
+                const studentId =
+                    studentIdInput.value.trim();
+
+                /*
+                    只允許數字，避免輸入空格、
+                    斜線或其他特殊符號。
+                */
+                if (!/^\d+$/.test(studentId)) {
+                    topicStatus.textContent =
+                        "請輸入正確的數字學號";
+
+                    topicStatus.className =
+                        "disconnected";
+
+                    mqttTopic = "";
+                    topicText.textContent =
+                        "尚未設定";
+
+                    startButton.disabled = true;
+
+                    return;
+                }
+
+                mqttTopic =
+                    "tlhc/" + studentId;
+
+                topicText.textContent =
+                    mqttTopic;
+
+                topicStatus.textContent =
+                    "設定完成";
+
+                topicStatus.className =
+                    "connected";
+
+                commandText.textContent =
+                    "尚未傳送";
+
+                updateStartButton();
+
+                console.log(
+                    "目前 MQTT Topic：",
+                    mqttTopic
+                );
+            }
+        );
+
+        /*
+            按下鍵盤 Enter 時，
+            也可以直接設定 Topic。
+        */
+        studentIdInput.addEventListener(
+            "keydown",
+            function (event) {
+                if (event.key === "Enter") {
+                    setTopicButton.click();
+                }
+            }
+        );
+
+        // ==========================================
+        // 更新語音按鈕狀態
+        // ==========================================
+
+        function updateStartButton() {
+            /*
+                必須同時符合：
+                1. MQTT 已連線
+                2. Topic 已設定
+            */
+            startButton.disabled =
+                !client.connected ||
+                mqttTopic === "";
+        }
+
+        // ==========================================
         // 傳送 MQTT 指令
         // ==========================================
 
@@ -359,6 +498,13 @@
             if (!client.connected) {
                 commandText.textContent =
                     "MQTT 尚未連線";
+
+                return;
+            }
+
+            if (mqttTopic === "") {
+                commandText.textContent =
+                    "請先設定 Topic";
 
                 return;
             }
@@ -387,7 +533,7 @@
                             command + "（已傳送）";
 
                         console.log(
-                            "MQTT 主題：",
+                            "MQTT Topic：",
                             mqttTopic
                         );
 
@@ -405,10 +551,6 @@
         // ==========================================
 
         function processSpeech(text) {
-            /*
-                移除所有空白與常見標點符號，
-                避免辨識結果中的格式影響判斷。
-            */
             const cleanText = text
                 .replace(/\s/g, "")
                 .replace(/[，。！？,.!?]/g, "");
@@ -467,13 +609,19 @@
             recognition.interimResults = false;
             recognition.maxAlternatives = 1;
 
-            // 按下按鈕
             startButton.addEventListener(
                 "click",
                 function () {
                     if (!client.connected) {
                         commandText.textContent =
                             "MQTT 尚未連線";
+
+                        return;
+                    }
+
+                    if (mqttTopic === "") {
+                        commandText.textContent =
+                            "請先設定 Topic";
 
                         return;
                     }
@@ -495,9 +643,7 @@
                         speechStatus.textContent =
                             "語音辨識已在執行中";
 
-                        if (client.connected) {
-                            startButton.disabled = false;
-                        }
+                        updateStartButton();
 
                         console.error(
                             "語音辨識啟動錯誤：",
@@ -507,13 +653,11 @@
                 }
             );
 
-            // 開始聆聽
             recognition.onstart = function () {
                 speechStatus.textContent =
                     "正在聆聽";
             };
 
-            // 收到辨識結果
             recognition.onresult = function (event) {
                 const transcript =
                     event.results[0][0].transcript;
@@ -527,7 +671,6 @@
                 processSpeech(transcript);
             };
 
-            // 語音辨識發生錯誤
             recognition.onerror = function (event) {
                 speechStatus.textContent =
                     "錯誤：" + event.error;
@@ -541,7 +684,6 @@
                 );
             };
 
-            // 語音辨識結束
             recognition.onend = function () {
                 if (
                     speechStatus.textContent ===
@@ -553,9 +695,7 @@
                         "辨識已結束";
                 }
 
-                if (client.connected) {
-                    startButton.disabled = false;
-                }
+                updateStartButton();
             };
         }
     </script>
