@@ -1,70 +1,380 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
+
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport"
-          content="width=device-width, initial-scale=1.0">
 
-    <title>iPad 語音辨識測試</title>
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>語音 MQTT 控制測試</title>
 
     <style>
         body {
             font-family: Arial, "Microsoft JhengHei", sans-serif;
             text-align: center;
-            background-color: #f5f5f5;
-            padding: 30px;
+            background-color: #f3f6f8;
+            margin: 0;
+            padding: 25px;
+        }
+
+        .container {
+            max-width: 650px;
+            margin: auto;
+            background-color: white;
+            padding: 25px;
+            border-radius: 18px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.12);
         }
 
         h1 {
-            font-size: 32px;
+            font-size: 30px;
+        }
+
+        p {
+            font-size: 18px;
+            line-height: 1.6;
         }
 
         button {
             font-size: 24px;
-            padding: 16px 30px;
-            margin: 20px;
+            padding: 16px 28px;
+            margin: 15px;
+            border: none;
+            border-radius: 12px;
+            background-color: #1976d2;
+            color: white;
             cursor: pointer;
         }
 
-        #status {
-            font-size: 22px;
-            margin-top: 20px;
+        button:disabled {
+            background-color: #999999;
+            cursor: not-allowed;
+        }
+
+        .box {
+            margin-top: 18px;
+            padding: 15px;
+            border-radius: 10px;
+            background-color: #eef3f7;
+            font-size: 20px;
+            line-height: 1.6;
+            word-break: break-word;
         }
 
         #result {
-            font-size: 32px;
+            margin-top: 8px;
+            min-height: 45px;
+            font-size: 30px;
             font-weight: bold;
-            margin-top: 20px;
-            min-height: 50px;
         }
 
-        #supportMessage {
-            margin-top: 30px;
+        #command {
+            margin-top: 8px;
+            min-height: 42px;
+            font-size: 28px;
+            font-weight: bold;
+        }
+
+        #mqttStatus {
+            font-weight: bold;
+        }
+
+        .connected {
+            color: green;
+        }
+
+        .disconnected {
+            color: red;
+        }
+
+        .waiting {
+            color: #c26a00;
+        }
+
+        .command-list {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #fff8e1;
+            border-radius: 10px;
             font-size: 18px;
+            line-height: 1.8;
         }
     </style>
+
+    <!-- 載入瀏覽器版 MQTT.js -->
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 </head>
 
 <body>
 
-    <h1>iPad 語音辨識測試</h1>
+    <div class="container">
 
-    <p>按下按鈕後，請說「開燈」或其他中文句子。</p>
+        <h1>🎤 語音 MQTT 控制</h1>
 
-    <button id="startButton">🎤 開始語音辨識</button>
+        <p>
+            請先確認 MQTT 顯示「已連線」，<br>
+            再按下按鈕並說出控制指令。
+        </p>
 
-    <div id="status">狀態：尚未開始</div>
+        <div class="box">
+            MQTT 狀態：
+            <span id="mqttStatus" class="waiting">
+                連線中……
+            </span>
+        </div>
 
-    <div id="result">辨識結果會顯示在這裡</div>
+        <button id="startButton" disabled>
+            🎤 開始語音辨識
+        </button>
 
-    <div id="supportMessage"></div>
+        <div class="box">
+            語音辨識狀態：
+            <span id="speechStatus">
+                尚未開始
+            </span>
+        </div>
+
+        <div class="box">
+            辨識結果：
+            <div id="result">
+                尚無結果
+            </div>
+        </div>
+
+        <div class="box">
+            MQTT 指令：
+            <div id="command">
+                尚未傳送
+            </div>
+        </div>
+
+        <div class="box">
+            MQTT 主題：
+            <div id="topicText"></div>
+        </div>
+
+        <div class="command-list">
+            可以說：
+            <br>
+            「開燈」→ on
+            <br>
+            「關燈」→ off
+            <br>
+            「紅燈」或「紅色」→ red
+            <br>
+            「藍燈」或「藍色」→ blue
+        </div>
+
+    </div>
 
     <script>
-        const startButton = document.getElementById("startButton");
-        const statusText = document.getElementById("status");
-        const resultText = document.getElementById("result");
-        const supportMessage =
-            document.getElementById("supportMessage");
+        // ==========================================
+        // MQTT 設定
+        // ==========================================
+
+        /*
+            GitHub Pages 是 HTTPS 網頁，
+            所以必須使用安全 WebSocket：wss://
+
+            MQTTGO.io：
+            網頁 WSS Port：8084
+            D1 mini MQTT Port：1883
+        */
+        const brokerUrl =
+            "wss://broker.mqttgo.io:8084/mqtt";
+
+        /*
+            網頁與 D1 mini 必須使用相同的 MQTT 主題。
+        */
+        const mqttTopic =
+            "lws621022/voice-mqtt/light";
+
+        /*
+            每台手機或平板建立不同的 Client ID，
+            避免多台裝置使用相同 ID 而互相斷線。
+        */
+        const clientId =
+            "voice_" +
+            Math.random().toString(16).substring(2, 10);
+
+        // ==========================================
+        // 取得網頁元件
+        // ==========================================
+
+        const mqttStatus =
+            document.getElementById("mqttStatus");
+
+        const startButton =
+            document.getElementById("startButton");
+
+        const speechStatus =
+            document.getElementById("speechStatus");
+
+        const resultText =
+            document.getElementById("result");
+
+        const commandText =
+            document.getElementById("command");
+
+        const topicText =
+            document.getElementById("topicText");
+
+        topicText.textContent = mqttTopic;
+
+        // ==========================================
+        // 連接 MQTTGO.io
+        // ==========================================
+
+        const client = mqtt.connect(brokerUrl, {
+            clientId: clientId,
+            clean: true,
+            connectTimeout: 10000,
+            reconnectPeriod: 3000
+        });
+
+        // MQTT 連線成功
+        client.on("connect", function () {
+            mqttStatus.textContent = "已連線";
+            mqttStatus.className = "connected";
+
+            startButton.disabled = false;
+
+            console.log("MQTT 連線成功");
+            console.log("Client ID：" + clientId);
+        });
+
+        // MQTT 嘗試重新連線
+        client.on("reconnect", function () {
+            mqttStatus.textContent = "重新連線中……";
+            mqttStatus.className = "waiting";
+
+            startButton.disabled = true;
+
+            console.log("MQTT 重新連線中");
+        });
+
+        // MQTT 離線
+        client.on("offline", function () {
+            mqttStatus.textContent = "目前離線";
+            mqttStatus.className = "disconnected";
+
+            startButton.disabled = true;
+
+            console.log("MQTT 離線");
+        });
+
+        // MQTT 連線關閉
+        client.on("close", function () {
+            mqttStatus.textContent = "連線中斷";
+            mqttStatus.className = "disconnected";
+
+            startButton.disabled = true;
+
+            console.log("MQTT 連線中斷");
+        });
+
+        // MQTT 發生錯誤
+        client.on("error", function (error) {
+            mqttStatus.textContent = "連線錯誤";
+            mqttStatus.className = "disconnected";
+
+            startButton.disabled = true;
+
+            console.error("MQTT 錯誤：", error);
+        });
+
+        // ==========================================
+        // 傳送 MQTT 指令
+        // ==========================================
+
+        function sendCommand(command) {
+            if (!client.connected) {
+                commandText.textContent =
+                    "MQTT 尚未連線";
+
+                return;
+            }
+
+            client.publish(
+                mqttTopic,
+                command,
+                {
+                    qos: 0,
+                    retain: false
+                },
+                function (error) {
+                    if (error) {
+                        commandText.textContent =
+                            command + "（傳送失敗）";
+
+                        console.error(
+                            "MQTT 傳送失敗：",
+                            error
+                        );
+                    } else {
+                        commandText.textContent =
+                            command + "（已傳送）";
+
+                        console.log(
+                            "已傳送 MQTT 訊息：",
+                            mqttTopic,
+                            command
+                        );
+                    }
+                }
+            );
+        }
+
+        // ==========================================
+        // 判斷語音辨識內容
+        // ==========================================
+
+        function processSpeech(text) {
+            /*
+                移除辨識結果中的所有空白，
+                避免「開 燈」之類的格式影響判斷。
+            */
+            const cleanText =
+                text.replace(/\s/g, "");
+
+            if (
+                cleanText.includes("開燈") ||
+                cleanText.includes("打開燈") ||
+                cleanText.includes("把燈打開")
+            ) {
+                sendCommand("on");
+            }
+            else if (
+                cleanText.includes("關燈") ||
+                cleanText.includes("關掉燈") ||
+                cleanText.includes("把燈關掉")
+            ) {
+                sendCommand("off");
+            }
+            else if (
+                cleanText.includes("紅燈") ||
+                cleanText.includes("紅色")
+            ) {
+                sendCommand("red");
+            }
+            else if (
+                cleanText.includes("藍燈") ||
+                cleanText.includes("藍色")
+            ) {
+                sendCommand("blue");
+            }
+            else {
+                commandText.textContent =
+                    "找不到對應指令";
+            }
+        }
+
+        // ==========================================
+        // 語音辨識設定
+        // ==========================================
 
         const SpeechRecognition =
             window.SpeechRecognition ||
@@ -73,53 +383,110 @@
         if (!SpeechRecognition) {
             startButton.disabled = true;
 
-            supportMessage.textContent =
-                "這個瀏覽器目前不支援網頁語音辨識。";
-
-            statusText.textContent =
-                "狀態：不支援語音辨識";
+            speechStatus.textContent =
+                "此瀏覽器不支援語音辨識";
         } else {
-            const recognition = new SpeechRecognition();
+            const recognition =
+                new SpeechRecognition();
 
             recognition.lang = "zh-TW";
             recognition.continuous = false;
             recognition.interimResults = false;
+            recognition.maxAlternatives = 1;
 
-            startButton.addEventListener("click", function () {
-                resultText.textContent = "請開始說話……";
-                statusText.textContent = "狀態：正在聆聽";
+            // 按下按鈕後開始辨識
+            startButton.addEventListener(
+                "click",
+                function () {
+                    if (!client.connected) {
+                        commandText.textContent =
+                            "MQTT 尚未連線";
 
-                try {
-                    recognition.start();
-                } catch (error) {
-                    statusText.textContent =
-                        "狀態：語音辨識正在執行中";
+                        return;
+                    }
+
+                    resultText.textContent =
+                        "請開始說話……";
+
+                    commandText.textContent =
+                        "等待辨識";
+
+                    speechStatus.textContent =
+                        "正在聆聽";
+
+                    startButton.disabled = true;
+
+                    try {
+                        recognition.start();
+                    } catch (error) {
+                        speechStatus.textContent =
+                            "語音辨識已在執行中";
+
+                        startButton.disabled = false;
+
+                        console.error(
+                            "語音辨識啟動錯誤：",
+                            error
+                        );
+                    }
                 }
-            });
+            );
 
-            recognition.onresult = function (event) {
-                const transcript =
-                    event.results[0][0].transcript;
+            // 收到辨識結果
+            recognition.onresult =
+                function (event) {
+                    const transcript =
+                        event.results[0][0].transcript;
 
-                resultText.textContent = transcript;
-                statusText.textContent = "狀態：辨識完成";
-            };
+                    resultText.textContent =
+                        transcript;
 
-            recognition.onerror = function (event) {
-                statusText.textContent =
-                    "狀態：發生錯誤－" + event.error;
-            };
+                    speechStatus.textContent =
+                        "辨識完成";
 
-            recognition.onend = function () {
-                if (statusText.textContent ===
-                    "狀態：正在聆聽") {
+                    processSpeech(transcript);
+                };
 
-                    statusText.textContent =
-                        "狀態：辨識已結束";
-                }
-            };
+            // 語音辨識開始
+            recognition.onstart =
+                function () {
+                    speechStatus.textContent =
+                        "正在聆聽";
+                };
+
+            // 語音辨識發生錯誤
+            recognition.onerror =
+                function (event) {
+                    speechStatus.textContent =
+                        "錯誤：" + event.error;
+
+                    commandText.textContent =
+                        "未傳送指令";
+
+                    console.error(
+                        "語音辨識錯誤：",
+                        event.error
+                    );
+                };
+
+            // 語音辨識結束
+            recognition.onend =
+                function () {
+                    if (
+                        speechStatus.textContent ===
+                        "正在聆聽"
+                    ) {
+                        speechStatus.textContent =
+                            "辨識已結束";
+                    }
+
+                    if (client.connected) {
+                        startButton.disabled = false;
+                    }
+                };
         }
     </script>
 
 </body>
+
 </html>
