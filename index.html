@@ -39,8 +39,19 @@
             line-height: 1.7;
         }
 
+        .setting-link {
+            display: inline-block;
+            margin: 2px 0 18px;
+            padding: 12px 22px;
+            border-radius: 10px;
+            background-color: #6a1b9a;
+            color: white;
+            font-size: 20px;
+            text-decoration: none;
+        }
+
         .topic-setting {
-            margin-top: 20px;
+            margin-top: 12px;
             padding: 18px;
             background-color: #e8f4ff;
             border-radius: 12px;
@@ -94,7 +105,8 @@
         }
 
         #mqttStatus,
-        #topicStatus {
+        #topicStatus,
+        #commandStatus {
             font-weight: bold;
         }
 
@@ -137,11 +149,21 @@
             border-radius: 10px;
             font-size: 18px;
             line-height: 1.9;
+            text-align: left;
         }
 
         .small-text {
             font-size: 15px;
             color: #666666;
+        }
+
+        .command-item {
+            padding: 5px 0;
+            border-bottom: 1px solid #dddddd;
+        }
+
+        .command-item:last-child {
+            border-bottom: none;
         }
     </style>
 
@@ -155,8 +177,12 @@
 
         <h1>🎤 語音 MQTT 控制</h1>
 
+        <a href="setting.html" class="setting-link">
+            ⚙️ 語音指令設定
+        </a>
+
         <p>
-            請先輸入自己的學號並設定 Topic，<br>
+            請先輸入自己的學號或代號並設定 Topic，<br>
             再使用語音控制。
         </p>
 
@@ -164,7 +190,7 @@
         <div class="topic-setting">
 
             <label for="studentId">
-                請輸入學號
+                請輸入學號或代號
             </label>
 
             <input
@@ -203,6 +229,13 @@
             </div>
         </div>
 
+        <div class="box">
+            語音指令設定：
+            <span id="commandStatus" class="waiting">
+                讀取中……
+            </span>
+        </div>
+
         <button id="startButton" disabled>
             🎤 開始語音辨識
         </button>
@@ -229,15 +262,8 @@
         </div>
 
         <div class="command-list">
-            可以說：
-            <br>
-            「開燈」→ on
-            <br>
-            「關燈」→ off
-            <br>
-            「紅燈」或「紅色」→ red
-            <br>
-            「藍燈」或「藍色」→ blue
+            <strong>目前可用指令：</strong>
+            <div id="commandListText"></div>
         </div>
 
         <div class="box small-text">
@@ -253,6 +279,42 @@
     </div>
 
     <script>
+        // ==========================================
+        // 預設語音指令
+        // ==========================================
+
+        const defaultCommands = [
+            {
+                keyword: "開燈",
+                message: "on"
+            },
+            {
+                keyword: "關燈",
+                message: "off"
+            },
+            {
+                keyword: "紅色",
+                message: "red"
+            },
+            {
+                keyword: "藍色",
+                message: "blue"
+            },
+            {
+                keyword: "彩虹燈",
+                message: "rainbow"
+            },
+            {
+                keyword: "播放音樂",
+                message: "music"
+            }
+        ];
+
+        const storageKey = "voiceCommands";
+
+        // 實際使用的指令陣列
+        let voiceCommands = [];
+
         // ==========================================
         // MQTT 基本設定
         // ==========================================
@@ -285,6 +347,9 @@
         const mqttStatus =
             document.getElementById("mqttStatus");
 
+        const commandStatus =
+            document.getElementById("commandStatus");
+
         const startButton =
             document.getElementById("startButton");
 
@@ -300,10 +365,133 @@
         const topicText =
             document.getElementById("topicText");
 
+        const commandListText =
+            document.getElementById("commandListText");
+
         const clientIdText =
             document.getElementById("clientIdText");
 
         clientIdText.textContent = clientId;
+
+        // ==========================================
+        // 讀取語音指令設定
+        // ==========================================
+
+        function loadVoiceCommands() {
+            const savedData =
+                localStorage.getItem(storageKey);
+
+            if (!savedData) {
+                voiceCommands = defaultCommands;
+
+                commandStatus.textContent =
+                    "使用預設設定，共 " +
+                    voiceCommands.length +
+                    " 組";
+
+                commandStatus.className =
+                    "waiting";
+
+                displayCommandList();
+
+                return;
+            }
+
+            try {
+                const parsedData =
+                    JSON.parse(savedData);
+
+                if (
+                    Array.isArray(parsedData) &&
+                    parsedData.length > 0
+                ) {
+                    /*
+                        再次過濾，確保每一組都有
+                        keyword 和 message。
+                    */
+                    voiceCommands =
+                        parsedData.filter(function (item) {
+                            return (
+                                item &&
+                                typeof item.keyword === "string" &&
+                                typeof item.message === "string" &&
+                                item.keyword.trim() !== "" &&
+                                item.message.trim() !== ""
+                            );
+                        });
+
+                    if (voiceCommands.length > 0) {
+                        commandStatus.textContent =
+                            "已載入自訂設定，共 " +
+                            voiceCommands.length +
+                            " 組";
+
+                        commandStatus.className =
+                            "connected";
+                    } else {
+                        voiceCommands = defaultCommands;
+
+                        commandStatus.textContent =
+                            "設定無有效內容，改用預設設定";
+
+                        commandStatus.className =
+                            "waiting";
+                    }
+                } else {
+                    voiceCommands = defaultCommands;
+
+                    commandStatus.textContent =
+                        "設定格式無效，改用預設設定";
+
+                    commandStatus.className =
+                        "waiting";
+                }
+            } catch (error) {
+                console.error(
+                    "讀取語音設定失敗：",
+                    error
+                );
+
+                voiceCommands = defaultCommands;
+
+                commandStatus.textContent =
+                    "讀取失敗，改用預設設定";
+
+                commandStatus.className =
+                    "disconnected";
+            }
+
+            displayCommandList();
+        }
+
+        // ==========================================
+        // 顯示目前可用指令
+        // ==========================================
+
+        function displayCommandList() {
+            commandListText.innerHTML = "";
+
+            voiceCommands.forEach(
+                function (item, index) {
+                    const commandItem =
+                        document.createElement("div");
+
+                    commandItem.className =
+                        "command-item";
+
+                    commandItem.textContent =
+                        (index + 1) +
+                        ". 「" +
+                        item.keyword +
+                        "」→ " +
+                        item.message;
+
+                    commandListText.appendChild(
+                        commandItem
+                    );
+                }
+            );
+        }
 
         // ==========================================
         // 檢查 MQTT.js 是否成功載入
@@ -402,26 +590,19 @@
         });
 
         // ==========================================
-        // 設定學生的 Topic
+        // 設定 Topic
         // ==========================================
 
         setTopicButton.addEventListener(
             "click",
             function () {
-                /*
-                    trim() 只會移除輸入內容
-                    前面與後面的空白。
-                */
                 const studentId =
                     studentIdInput.value.trim();
 
-                /*
-                    不檢查長度，也不限制文字格式，
-                    只檢查是否有輸入。
-                */
+                // 只檢查是否有輸入
                 if (studentId === "") {
                     topicStatus.textContent =
-                        "請先輸入學號";
+                        "請先輸入學號或代號";
 
                     topicStatus.className =
                         "disconnected";
@@ -436,7 +617,6 @@
                     return;
                 }
 
-                // 自動組合 Topic
                 mqttTopic = "tlhc/" + studentId;
 
                 topicText.textContent = mqttTopic;
@@ -459,10 +639,7 @@
             }
         );
 
-        /*
-            在輸入框按 Enter，
-            也可以直接設定 Topic。
-        */
+        // 在輸入框按 Enter 也能設定 Topic
         studentIdInput.addEventListener(
             "keydown",
             function (event) {
@@ -473,15 +650,10 @@
         );
 
         // ==========================================
-        // 更新語音辨識按鈕狀態
+        // 更新語音按鈕狀態
         // ==========================================
 
         function updateStartButton() {
-            /*
-                必須符合：
-                1. MQTT 已連線
-                2. Topic 已設定
-            */
             startButton.disabled =
                 !client.connected ||
                 mqttTopic === "";
@@ -544,47 +716,48 @@
         }
 
         // ==========================================
-        // 判斷語音指令
+        // 清理語音文字
+        // ==========================================
+
+        function cleanSpeechText(text) {
+            return text
+                .replace(/\s/g, "")
+                .replace(/[，。！？,.!?；;：:]/g, "")
+                .toLowerCase();
+        }
+
+        // ==========================================
+        // 判斷自訂語音指令
         // ==========================================
 
         function processSpeech(text) {
-            /*
-                移除空白與常見標點符號。
-            */
-            const cleanText = text
-                .replace(/\s/g, "")
-                .replace(/[，。！？,.!?]/g, "");
+            const cleanText =
+                cleanSpeechText(text);
 
-            if (
-                cleanText.includes("開燈") ||
-                cleanText.includes("打開燈") ||
-                cleanText.includes("把燈打開")
+            for (
+                let i = 0;
+                i < voiceCommands.length;
+                i++
             ) {
-                sendCommand("on");
+                const item =
+                    voiceCommands[i];
+
+                const cleanKeyword =
+                    cleanSpeechText(
+                        item.keyword
+                    );
+
+                if (
+                    cleanKeyword !== "" &&
+                    cleanText.includes(cleanKeyword)
+                ) {
+                    sendCommand(item.message);
+                    return;
+                }
             }
-            else if (
-                cleanText.includes("關燈") ||
-                cleanText.includes("關掉燈") ||
-                cleanText.includes("把燈關掉")
-            ) {
-                sendCommand("off");
-            }
-            else if (
-                cleanText.includes("紅燈") ||
-                cleanText.includes("紅色")
-            ) {
-                sendCommand("red");
-            }
-            else if (
-                cleanText.includes("藍燈") ||
-                cleanText.includes("藍色")
-            ) {
-                sendCommand("blue");
-            }
-            else {
-                commandText.textContent =
-                    "找不到對應指令";
-            }
+
+            commandText.textContent =
+                "找不到對應指令";
         }
 
         // ==========================================
@@ -625,6 +798,13 @@
 
                         return;
                     }
+
+                    /*
+                        每次開始辨識前重新載入設定，
+                        因此從 setting.html 返回後，
+                        不必關閉整個 Safari。
+                    */
+                    loadVoiceCommands();
 
                     resultText.textContent =
                         "請開始說話……";
@@ -698,6 +878,23 @@
                 updateStartButton();
             };
         }
+
+        // ==========================================
+        // 網頁開啟時讀取指令
+        // ==========================================
+
+        loadVoiceCommands();
+
+        /*
+            從 setting.html 返回 index.html，
+            或切換回此分頁時，再讀取一次設定。
+        */
+        window.addEventListener(
+            "pageshow",
+            function () {
+                loadVoiceCommands();
+            }
+        );
     </script>
 
 </body>
