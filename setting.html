@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>語音指令設定</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            padding: 24px;
+            background-color: #f3f6f8;
+            font-family: Arial, "Microsoft JhengHei", sans-serif;
+            color: #222222;
+        }
+
+        .container {
+            max-width: 760px;
+            margin: auto;
+            padding: 26px;
+            background-color: white;
+            border-radius: 18px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.12);
+        }
+
+        h1 {
+            margin-top: 0;
+            text-align: center;
+            font-size: 32px;
+        }
+
+        .description {
+            text-align: center;
+            font-size: 18px;
+            line-height: 1.7;
+        }
+
+        .example {
+            margin: 20px 0;
+            padding: 15px;
+            background-color: #fff8e1;
+            border-radius: 10px;
+            font-size: 17px;
+            line-height: 1.7;
+        }
+
+        .command-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px;
+            margin-top: 16px;
+            padding: 17px;
+            background-color: #eef3f7;
+            border-radius: 12px;
+        }
+
+        .command-number {
+            grid-column: 1 / -1;
+            font-size: 20px;
+            font-weight: bold;
+            color: #1565c0;
+        }
+
+        .input-group {
+            text-align: left;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 7px;
+            font-size: 17px;
+            font-weight: bold;
+        }
+
+        input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #aaaaaa;
+            border-radius: 8px;
+            font-size: 20px;
+        }
+
+        input:focus {
+            border-color: #1976d2;
+            outline: none;
+        }
+
+        .button-area {
+            margin-top: 25px;
+            text-align: center;
+        }
+
+        button,
+        .back-button {
+            display: inline-block;
+            margin: 7px;
+            padding: 14px 23px;
+            border: none;
+            border-radius: 10px;
+            color: white;
+            font-size: 19px;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        #saveButton {
+            background-color: #00897b;
+        }
+
+        #defaultButton {
+            background-color: #1976d2;
+        }
+
+        #clearButton {
+            background-color: #c62828;
+        }
+
+        .back-button {
+            background-color: #6a1b9a;
+        }
+
+        #statusBox {
+            display: none;
+            margin-top: 20px;
+            padding: 14px;
+            border-radius: 10px;
+            text-align: center;
+            font-size: 20px;
+            font-weight: bold;
+        }
+
+        .success {
+            display: block !important;
+            background-color: #e8f5e9;
+            color: #2e7d32;
+        }
+
+        .error {
+            display: block !important;
+            background-color: #ffebee;
+            color: #c62828;
+        }
+
+        .notice {
+            margin-top: 22px;
+            padding: 14px;
+            background-color: #e8f4ff;
+            border-radius: 10px;
+            font-size: 16px;
+            line-height: 1.7;
+        }
+
+        @media (max-width: 600px) {
+            body {
+                padding: 12px;
+            }
+
+            .container {
+                padding: 18px;
+            }
+
+            .command-row {
+                grid-template-columns: 1fr;
+            }
+
+            .command-number {
+                grid-column: 1;
+            }
+
+            button,
+            .back-button {
+                width: 100%;
+                margin: 6px 0;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+
+        <h1>⚙️ 語音指令設定</h1>
+
+        <div class="description">
+            設定口說文字與要送出的 MQTT 訊息。<br>
+            不需要修改 GitHub 程式碼。
+        </div>
+
+        <div class="example">
+            例如：
+            <br>
+            語音關鍵字填入「開燈」
+            <br>
+            MQTT 訊息填入「on」
+            <br><br>
+            之後說出「請幫我開燈」，網頁就會送出
+            <strong>on</strong>。
+        </div>
+
+        <!-- 第 1 組 -->
+        <div class="command-row">
+
+            <div class="command-number">
+                指令 1
+            </div>
+
+            <div class="input-group">
+                <label for="keyword1">
+                    語音關鍵字
+                </label>
+
+                <input
+                    type="text"
+                    id="keyword1"
+                    placeholder="例如：開燈"
+                    autocomplete="off"
+                >
+            </div>
+
+            <div class="input-group">
+                <label for="message1">
+                    MQTT 訊息
+                </label>
+
+                <input
+                    type="text"
+                    id="message1"
+                    placeholder="例如：on"
+                    autocomplete="off"
+                >
+            </div>
+
+        </div>
+
+        <!-- 第 2 組 -->
+        <div class="command-row">
+
+            <div class="command-number">
+                指令 2
+            </div>
+
+            <div class="input-group">
+                <label for="keyword2">
+                    語音關鍵字
+                </label>
+
+                <input
+                    type="text"
+                    id="keyword2"
+                    placeholder="例如：關燈"
+                    autocomplete="off"
+                >
+            </div>
+
+            <div class="input-group">
+                <label for="message2">
+                    MQTT 訊息
+                </label>
+
+                <input
+                    type="text"
+                    id="message2"
+                    placeholder="例如：off"
+                    autocomplete="off"
+                >
+            </div>
+
+        </div>
+
+        <!-- 第 3 組 -->
+        <div class="command-row">
+
+            <div class="command-number">
+                指令 3
+            </div>
+
+            <div class="input-group">
+                <label for="keyword3">
+                    語音關鍵字
+                </label>
+
+                <input
+                    type="text"
+                    id="keyword3"
+                    placeholder="例如：紅色"
+                    autocomplete="off"
+                >
+            </div>
+
+            <div class="input-group">
+                <label for="message3">
+                    MQTT 訊息
+                </label>
+
+                <input
+                    type="text"
+                    id="message3"
+                    placeholder="例如：red"
+                    autocomplete="off"
+                >
+            </div>
+
+        </div>
+
+        <!-- 第 4 組 -->
+        <div class="command-row">
+
+            <div class="command-number">
+                指令 4
+            </div>
+
+            <div class="input-group">
+                <label for="keyword4">
+                    語音關鍵字
+                </label>
+
+                <input
+                    type="text"
+                    id="keyword4"
+                    placeholder="例如：藍色"
+                    autocomplete="off"
+                >
+            </div>
+
+            <div class="input-group">
+                <label for="message4">
+                    MQTT 訊息
+                </label>
+
+                <input
+                    type="text"
+                    id="message4"
+                    placeholder="例如：blue"
+                    autocomplete="off"
+                >
+            </div>
+
+        </div>
+
+        <!-- 第 5 組 -->
+        <div class="command-row">
+
+            <div class="command-number">
+                指令 5
+            </div>
+
+            <div class="input-group">
+                <label for="keyword5">
+                    語音關鍵字
+                </label>
+
+                <input
+                    type="text"
+                    id="keyword5"
+                    placeholder="例如：彩虹燈"
+                    autocomplete="off"
+                >
+            </div>
+
+            <div class="input-group">
+                <label for="message5">
+                    MQTT 訊息
+                </label>
+
+                <input
+                    type="text"
+                    id="message5"
+                    placeholder="例如：rainbow"
+                    autocomplete="off"
+                >
+            </div>
+
+        </div>
+
+        <!-- 第 6 組 -->
+        <div class="command-row">
+
+            <div class="command-number">
+                指令 6
+            </div>
+
+            <div class="input-group">
+                <label for="keyword6">
+                    語音關鍵字
+                </label>
+
+                <input
+                    type="text"
+                    id="keyword6"
+                    placeholder="例如：播放音樂"
+                    autocomplete="off"
+                >
+            </div>
+
+            <div class="input-group">
+                <label for="message6">
+                    MQTT 訊息
+                </label>
+
+                <input
+                    type="text"
+                    id="message6"
+                    placeholder="例如：music"
+                    autocomplete="off"
+                >
+            </div>
+
+        </div>
+
+        <div class="button-area">
+
+            <button id="saveButton">
+                儲存設定
+            </button>
+
+            <button id="defaultButton">
+                恢復預設
+            </button>
+
+            <button id="clearButton">
+                清除全部
+            </button>
+
+            <br>
+
+            <a href="index.html" class="back-button">
+                返回語音控制頁
+            </a>
+
+        </div>
+
+        <div id="statusBox"></div>
+
+        <div class="notice">
+            設定會儲存在目前這台裝置的瀏覽器中。
+            不同 iPad 可以保存不同的語音指令。
+            若清除 Safari 網站資料，這些設定也會被刪除。
+        </div>
+
+    </div>
+
+    <script>
+        // ==========================================
+        // 預設語音指令
+        // ==========================================
+
+        const defaultCommands = [
+            {
+                keyword: "開燈",
+                message: "on"
+            },
+            {
+                keyword: "關燈",
+                message: "off"
+            },
+            {
+                keyword: "紅色",
+                message: "red"
+            },
+            {
+                keyword: "藍色",
+                message: "blue"
+            },
+            {
+                keyword: "彩虹燈",
+                message: "rainbow"
+            },
+            {
+                keyword: "播放音樂",
+                message: "music"
+            }
+        ];
+
+        // localStorage 使用的名稱
+        const storageKey = "voiceCommands";
+
+        const saveButton =
+            document.getElementById("saveButton");
+
+        const defaultButton =
+            document.getElementById("defaultButton");
+
+        const clearButton =
+            document.getElementById("clearButton");
+
+        const statusBox =
+            document.getElementById("statusBox");
+
+        // ==========================================
+        // 顯示狀態訊息
+        // ==========================================
+
+        function showStatus(message, type) {
+            statusBox.textContent = message;
+            statusBox.className = type;
+
+            window.scrollTo({
+                top: document.body.scrollHeight,
+                behavior: "smooth"
+            });
+        }
+
+        // ==========================================
+        // 將指令顯示到輸入框
+        // ==========================================
+
+        function displayCommands(commands) {
+            for (let i = 0; i < 6; i++) {
+                const keywordInput =
+                    document.getElementById(
+                        "keyword" + (i + 1)
+                    );
+
+                const messageInput =
+                    document.getElementById(
+                        "message" + (i + 1)
+                    );
+
+                if (commands[i]) {
+                    keywordInput.value =
+                        commands[i].keyword || "";
+
+                    messageInput.value =
+                        commands[i].message || "";
+                } else {
+                    keywordInput.value = "";
+                    messageInput.value = "";
+                }
+            }
+        }
+
+        // ==========================================
+        // 讀取已儲存設定
+        // ==========================================
+
+        function loadCommands() {
+            const savedData =
+                localStorage.getItem(storageKey);
+
+            if (!savedData) {
+                displayCommands(defaultCommands);
+                return;
+            }
+
+            try {
+                const commands =
+                    JSON.parse(savedData);
+
+                if (Array.isArray(commands)) {
+                    displayCommands(commands);
+                } else {
+                    displayCommands(defaultCommands);
+                }
+            } catch (error) {
+                console.error(
+                    "讀取設定失敗：",
+                    error
+                );
+
+                displayCommands(defaultCommands);
+            }
+        }
+
+        // ==========================================
+        // 儲存設定
+        // ==========================================
+
+        saveButton.addEventListener(
+            "click",
+            function () {
+                const commands = [];
+
+                for (let i = 1; i <= 6; i++) {
+                    const keyword =
+                        document
+                            .getElementById(
+                                "keyword" + i
+                            )
+                            .value
+                            .trim();
+
+                    const message =
+                        document
+                            .getElementById(
+                                "message" + i
+                            )
+                            .value
+                            .trim();
+
+                    /*
+                        關鍵字與訊息都填寫時，
+                        才加入指令清單。
+                    */
+                    if (
+                        keyword !== "" &&
+                        message !== ""
+                    ) {
+                        commands.push({
+                            keyword: keyword,
+                            message: message
+                        });
+                    }
+                }
+
+                if (commands.length === 0) {
+                    showStatus(
+                        "請至少設定一組完整指令。",
+                        "error"
+                    );
+
+                    return;
+                }
+
+                localStorage.setItem(
+                    storageKey,
+                    JSON.stringify(commands)
+                );
+
+                showStatus(
+                    "設定已儲存，共 " +
+                    commands.length +
+                    " 組指令。",
+                    "success"
+                );
+            }
+        );
+
+        // ==========================================
+        // 恢復預設設定
+        // ==========================================
+
+        defaultButton.addEventListener(
+            "click",
+            function () {
+                displayCommands(defaultCommands);
+
+                localStorage.setItem(
+                    storageKey,
+                    JSON.stringify(defaultCommands)
+                );
+
+                showStatus(
+                    "已恢復並儲存預設指令。",
+                    "success"
+                );
+            }
+        );
+
+        // ==========================================
+        // 清除全部設定
+        // ==========================================
+
+        clearButton.addEventListener(
+            "click",
+            function () {
+                const confirmed = confirm(
+                    "確定要清除全部語音指令嗎？"
+                );
+
+                if (!confirmed) {
+                    return;
+                }
+
+                for (let i = 1; i <= 6; i++) {
+                    document.getElementById(
+                        "keyword" + i
+                    ).value = "";
+
+                    document.getElementById(
+                        "message" + i
+                    ).value = "";
+                }
+
+                localStorage.removeItem(storageKey);
+
+                showStatus(
+                    "全部設定已清除。",
+                    "success"
+                );
+            }
+        );
+
+        // ==========================================
+        // 網頁開啟時載入設定
+        // ==========================================
+
+        loadCommands();
+    </script>
+
+</body>
+
+</html>
